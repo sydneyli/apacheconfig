@@ -23,10 +23,22 @@ class DoubleQuotedString(str):
 
 class HashCommentsLexer(object):
     tokens = (
+        'WHITESPACE',
+        'NEWLINE',
         'HASHCOMMENT',
     )
 
     states = ()
+
+    def t_NEWLINE(self, t):
+        r'[ \t]*((\r\n|\n|\r)[\t ]*)+'
+        if t.value != '\\':
+            t.lexer.lineno += 1
+        return t
+
+    def t_WHITESPACE(self, t):
+        r'[ \t]+'
+        return t
 
     def t_HASHCOMMENT(self, t):
         r'(?<!\\)\#[^\n\r]*'
@@ -88,7 +100,6 @@ class ApacheIncludesLexer(object):
         r'(?i)includeoptional[\t ]+[^\n\r]+'
         t.value = t.value.split(None, 1)[1]
         return t
-
 
 class BaseApacheConfigLexer(object):
 
@@ -159,7 +170,7 @@ class BaseApacheConfigLexer(object):
     def _parse_option_value(token):
         if not re.match(r'.*?[ \n\r\t=]+', token):
             raise ApacheConfigError('Syntax error in option-value pair %s' % token)
-        option, value = re.split(r'[ \n\r\t=]+', token, maxsplit=1)
+        option, middle, value = re.split(r'([ \n\r\t=]+)', token, maxsplit=1)
         if not option:
             raise ApacheConfigError('Syntax error in option-value pair %s' % token)
         if value:
@@ -170,7 +181,7 @@ class BaseApacheConfigLexer(object):
                 value = SingleQuotedString(stripped[1:-1])
         if '#' in value:
             value = value.replace('\\#', '#')
-        return option, value
+        return option, middle, value
 
     def _pre_parse_value(self, option, value):
         try:
@@ -181,7 +192,7 @@ class BaseApacheConfigLexer(object):
             return True, option, value
 
     def t_OPTION_AND_VALUE(self, t):
-        r'[^ \n\r\t=#]+[ \t=]+[^\r\n#]+'  # TODO(etingof) escape hash
+        r'[^ \n\r\t=#]+([ \t=]+[^ \n\r#]+)+'  # TODO(etingof) escape hash
         if t.value.endswith('\\'):
             t.lexer.multiline_newline_seen = False
             t.lexer.code_start = t.lexer.lexpos - len(t.value)
@@ -190,7 +201,7 @@ class BaseApacheConfigLexer(object):
 
         lineno = len(re.findall(r'\r\n|\n|\r', t.value))
 
-        option, value = self._parse_option_value(t.value)
+        option, whitespace, value = self._parse_option_value(t.value)
 
         process, option, value = self._pre_parse_value(option, value)
         if not process:
@@ -199,11 +210,12 @@ class BaseApacheConfigLexer(object):
         if value.startswith('<<'):
             t.lexer.heredoc_anchor = value[2:].strip()
             t.lexer.heredoc_option = option
+            t.lexer.heredoc_whitespace = whitespace
             t.lexer.code_start = t.lexer.lexpos
             t.lexer.begin('heredoc')
             return
 
-        t.value = option, value
+        t.value = option, whitespace, value
 
         t.lexer.lineno += lineno
 
@@ -220,16 +232,23 @@ class BaseApacheConfigLexer(object):
         t.lexer.begin('INITIAL')
 
         value = t.lexer.lexdata[t.lexer.code_start:t.lexer.lexpos + 1]
-        t.lexer.lineno += len(re.findall(r'\r\n|\n|\r', value))
-        value = value.replace('\\\n', '').replace('\r', '').replace('\n', '')
 
-        option, value = self._parse_option_value(value)
+        # don't eat trailing whitespace
+        # TODO(sydli) fix escaped newline case
+        any_trailing_whitespace = [m.start(0) for m in re.finditer(r'[ \t\r\n]+$', value)]
+        if len(any_trailing_whitespace) == 1:
+            t.lexer.lexpos = t.lexer.code_start + any_trailing_whitespace[0]
+            value = t.lexer.lexdata[t.lexer.code_start:t.lexer.lexpos]
+
+        t.lexer.lineno += len(re.findall(r'\r\n|\n|\r', value))
+        option, whitespace, value = self._parse_option_value(value)
 
         process, option, value = self._pre_parse_value(option, value)
         if not process:
             return
 
-        t.value = option, value
+        value = value.replace('\\\n', '').replace('\r', '').replace('\n', '')
+        t.value = option, whitespace, value
 
         return t
 
@@ -254,7 +273,7 @@ class BaseApacheConfigLexer(object):
 
         t.lexer.lineno += len(re.findall(r'\r\n|\n|\r', t.value))
 
-        t.value = t.lexer.heredoc_option, value
+        t.value = t.lexer.heredoc_option, t.lexer.heredoc_whitespace, value
 
         return t
 
@@ -264,14 +283,6 @@ class BaseApacheConfigLexer(object):
 
     def t_heredoc_error(self, t):
         raise ApacheConfigError("Illegal character '%s' in here-document text" % t.value[0])
-
-    def t_WHITESPACE(self, t):
-        r'[ \t]+'
-
-    def t_NEWLINE(self, t):
-        r'\r\n|\n|\r|\\'
-        if t.value != '\\':
-            t.lexer.lineno += 1
 
     def t_error(self, t):
         raise ApacheConfigError("Illegal character '%s'" % t.value[0])
