@@ -23,13 +23,13 @@ class ParserTestCase(unittest.TestCase):
 
         parser = ApacheConfigParser(ApacheConfigLexer(), start='statement')
 
-        ast = parser.parse('a b\n')
+        ast = parser.parse('a b')
         self.assertEqual(ast, ['statement', 'a', 'b'])
 
-        ast = parser.parse('a=b\n')
+        ast = parser.parse('a=b')
         self.assertEqual(ast, ['statement', 'a', 'b'])
 
-        ast = parser.parse('a "b c"\n')
+        ast = parser.parse('a "b c"')
         self.assertEqual(ast, ['statement', 'a', 'b c'])
 
     def testHashComments(self):
@@ -151,8 +151,7 @@ a "b"
   a = "b b"
   # a b
   a = "b b"
-</a>
-"""
+</a>"""
         ApacheConfigLexer = make_lexer()
         ApacheConfigParser = make_parser()
 
@@ -173,8 +172,7 @@ a "b"
      <c>
      </c>
   </b>
-</a>
-"""
+</a>"""
             ApacheConfigLexer = make_lexer()
             ApacheConfigParser = make_parser()
 

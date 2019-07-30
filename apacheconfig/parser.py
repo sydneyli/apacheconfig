@@ -14,7 +14,8 @@ log = logging.getLogger(__name__)
 
 class HashCommentsParser(object):
     def p_hashcomment(self, p):
-        """comment : HASHCOMMENT
+        """comment : NEWLINE HASHCOMMENT
+                   | WHITESPACE HASHCOMMENT
         """
         p[0] = ['comment', p[1]]
 
@@ -70,16 +71,16 @@ class BaseApacheConfigParser(object):
             errorlog=log if self._debug else None
         )
 
-    def parse(self, text):
+    def parse(self, text, debug=False):
         self.reset()
-        return self.engine.parse(text)
+        return self.engine.parse(text, debug=debug)
 
     # Parsing rules
 
     def p_statement(self, p):
         """statement : OPTION_AND_VALUE
         """
-        p[0] = ['statement', p[1][0], p[1][1]]
+        p[0] = ['statement', p[1][0], p[1][2]]
 
         if self.options.get('lowercasenames'):
             p[0][1] = p[0][1].lower()
@@ -91,33 +92,61 @@ class BaseApacheConfigParser(object):
 
     def p_item(self, p):
         """item : statement
-                | comment
                 | include
                 | includeoptional
                 | block
         """
         p[0] = p[1:][0]
 
+    def p_startitem(self, p):
+        """startitem : WHITESPACE item
+                     | NEWLINE item
+                     | WHITESPACE comment
+                     | NEWLINE comment
+                     | item
+                     | comment
+        """
+        if len(p) == 3:
+            p[0] = p[1:][1]
+        else:
+            p[0] = p[1:][0]
+
+    def p_miditem(self, p):
+        """miditem : NEWLINE item
+                   | NEWLINE comment
+                   | WHITESPACE comment
+                   | comment
+        """
+        if len(p) == 3:
+            p[0] = p[1:][1]
+        else:
+            p[0] = p[1:][0]
+
     def p_contents(self, p):
-        """contents : contents item
-                    | item
+        """contents : contents miditem
+                    | contents NEWLINE
+                    | contents WHITESPACE
+                    | startitem
         """
         n = len(p)
         if n == 3:
-            p[0] = p[1] + [p[2]]
+            if isinstance(p[2], str) and p[2].isspace():
+                p[0] = p[1]
+            else:
+                p[0] = p[1] + [p[2]]
         else:
             p[0] = ['contents', p[1]]
 
     def p_block(self, p):
         """block : OPEN_TAG contents CLOSE_TAG
-                 | OPEN_TAG CLOSE_TAG
+                 | OPEN_TAG NEWLINE CLOSE_TAG
                  | OPEN_CLOSE_TAG
         """
         n = len(p)
         if n == 4:
+            if isinstance(p[2], str) and p[2].isspace():
+                p[2] = []
             p[0] = ['block', p[1], p[2], p[3]]
-        elif n == 3:
-            p[0] = ['block', p[1],  [], p[2]]
         else:
             p[0] = ['block', p[1], [], p[1]]
 
