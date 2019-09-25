@@ -25,11 +25,14 @@ except ImportError:
 class WLoaderTestCase(unittest.TestCase):
 
     def _test_item_cases(self, cases, expected_type, options={}):
-        for raw, expected in cases:
+        for raw, expected_name, expected_value in cases:
             node = parse_item(raw, options)
-            self.assertEqual(expected, node.value,
+            self.assertEqual(expected_name, node.name,
+                "Expected node('%s').name to be %s, got %s" %
+                    (repr(raw), expected_name, node.name))
+            self.assertEqual(expected_value, node.value,
                 "Expected node('%s').value to be %s, got %s" %
-                    (repr(raw), expected, node.value))
+                    (repr(raw), expected_value, node.value))
             self.assertEqual(raw, str(node),
                 "Expected str(node('%s')) to be the same, but got '%s'" %
                     (repr(raw), str(node)))
@@ -39,28 +42,29 @@ class WLoaderTestCase(unittest.TestCase):
 
     def testLoadStatement(self):
         cases = [
-            ('option value', ('option', ' ', 'value')),
-            ('  option value', ('  ', 'option', ' ', 'value')),
-            ('\noption value', ('\n', 'option', ' ', 'value')),
-            ('option "dblquoted value"', ('option', ' ', 'dblquoted value')),
-            ("option 'sglquoted value'", ("option", " ", "sglquoted value")),
+            ('option value', 'option', 'value'),
+            ('  option value', 'option', 'value'),
+            ('  option = value', 'option', 'value'),
+            ('\noption value', 'option', 'value'),
+            ('option "dblquoted value"', 'option', 'dblquoted value'),
+            ("option 'sglquoted value'", "option", "sglquoted value"),
         ]
         self._test_item_cases(cases, 'statement')
 
     def testLoadComment(self):
         comment = '# here is a silly comment'
         cases = [
-            (comment, (comment,)),
-            ('\n' + comment, ('\n', comment)),
-            (' ' + comment, (' ', comment)),
+            (comment, comment, comment),
+            ('\n' + comment, comment, comment),
+            (' ' + comment, comment, comment),
         ]
         self._test_item_cases(cases, 'comment')
 
     def testLoadApacheInclude(self):
         cases = [
-            ('include path', ('include', ' ', 'path')),
-            ('  include path', ('  ', 'include', ' ', 'path')),
-            ('\ninclude path', ('\n', 'include', ' ', 'path')),
+            ('include path', 'include', 'path'),
+            ('  include path', 'include', 'path'),
+            ('\ninclude path', 'include', 'path'),
         ]
         self._test_item_cases(cases, 'include',
             options={'useapacheinclude': True})
@@ -68,10 +72,10 @@ class WLoaderTestCase(unittest.TestCase):
     def testContents(self):
         cases = [
             ('a b\nc d', ('a b', '\nc d')),
-            ('  \n', ('  \n',)),
-            ('a b  \n', ('a b', '  \n')),
+            ('  \n', tuple()),
+            ('a b  \n', ('a b',)),
             ('a b # comment', ('a b', ' # comment')),
-            ('a b\n<b/>  \n', ('a b', '\n<b/>', '  \n')),
+            ('a b\n<b/>  \n', ('a b', '\n<b/>')),
         ]
         for raw, expected in cases:
             node = parse_contents(raw)
@@ -88,6 +92,7 @@ class WLoaderTestCase(unittest.TestCase):
             '<b>\n</b>',
             '<b  name>\n</b name>',
             '<b>\n</b>',
+            '\n<b>\n</b>',
         ]
         for raw in cases:
             node = parse_block(raw)
