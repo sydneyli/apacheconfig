@@ -110,14 +110,3 @@ c "d d"
 """
         node = parse_contents(text)
         self.assertEqual(text, str(node))
-
-#         ApacheConfigLexer = make_lexer()
-#         ApacheConfigParser = make_parser()
-# 
-#         loader = ApacheConfigLoader(ApacheConfigParser(ApacheConfigLexer()))
-# 
-#         config = loader.loads(text)
-# 
-#         self.assertEqual(config, {'a': ['b', {'block': {'a': 'b'}},
-#                                         'b', {'a block': {'c': 'd d'}}]})
-
