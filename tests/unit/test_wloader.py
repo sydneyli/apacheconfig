@@ -22,8 +22,33 @@ except ImportError:
 
     import mock
 
-class WLoaderTestCase(unittest.TestCase):
+class WLoaderTestCaseWrite(unittest.TestCase):
+    def testChangeItemValue(self):
+        cases = [
+            ('option value', 'value2', 'option value2'),
+            ('\noption value', 'value2', '\noption value2'),
+            ('\noption =\\\n  value', 'value2', '\noption =\\\n  value2'),
+            ('option value', 'long  value', 'option long  value'),
+            ('option value', '"long  value"', 'option "long  value"'),
+            ('option', 'option2', 'option option2'),
+            ('include old/path/to/file', 'new/path/to/file', 'include new/path/to/file'),
+        ]
+        for raw, new_value, expected in cases:
+            node = parse_item(raw)
+            node.value = new_value
+            self.assertEqual(expected, str(node))
 
+    def testChangeBlockValue(self):
+        cases = [
+            ("<block name/>", "name2", "<block name2/>"),
+            ("<block/>", "name2", "<block name2/>"),
+        ]
+        for raw, new_value, expected in cases:
+            node = parse_block(raw)
+            node.arguments = new_value
+            self.assertEqual(expected, str(node))
+
+class WLoaderTestCaseRead(unittest.TestCase):
     def _test_item_cases(self, cases, expected_type, options={}):
         for raw, expected_name, expected_value in cases:
             node = parse_item(raw, options)
@@ -43,6 +68,7 @@ class WLoaderTestCase(unittest.TestCase):
     def testLoadStatement(self):
         cases = [
             ('option value', 'option', 'value'),
+            ('option', 'option', None),
             ('  option value', 'option', 'value'),
             ('  option = value', 'option', 'value'),
             ('\noption value', 'option', 'value'),
@@ -54,9 +80,9 @@ class WLoaderTestCase(unittest.TestCase):
     def testLoadComment(self):
         comment = '# here is a silly comment'
         cases = [
-            (comment, comment, comment),
-            ('\n' + comment, comment, comment),
-            (' ' + comment, comment, comment),
+            (comment, comment, None),
+            ('\n' + comment, comment, None),
+            (' ' + comment, comment, None),
         ]
         self._test_item_cases(cases, 'comment')
 
@@ -69,7 +95,7 @@ class WLoaderTestCase(unittest.TestCase):
         self._test_item_cases(cases, 'include',
             options={'useapacheinclude': True})
 
-    def testContents(self):
+    def testLoadContents(self):
         cases = [
             ('a b\nc d', ('a b', '\nc d')),
             ('  \n', tuple()),
@@ -84,18 +110,20 @@ class WLoaderTestCase(unittest.TestCase):
                 self.assertEqual(str(got), expected)
             self.assertEqual(raw, str(node))
 
-    def testBlockCases(self):
+    def testLoadBlocks(self):
         cases = [
-            '<b>\nhello there\nit me\n</b>',
-            '<b/>',
-            '<b name/>',
-            '<b>\n</b>',
-            '<b  name>\n</b name>',
-            '<b>\n</b>',
-            '\n<b>\n</b>',
+            ('<b>\nhello there\nit me\n</b>', None),
+            ('<b/>', None),
+            ('<b name/>', 'name'),
+            ('<b>\n</b>', None),
+            ('<b  name>\n</b name>', 'name'),
+            ('<b>\n</b>', None),
+            ('\n<b>\n</b>', None),
         ]
-        for raw in cases:
+        for (raw, value) in cases:
             node = parse_block(raw)
+            self.assertEqual("b", node.tag)
+            self.assertEqual(value, node.arguments)
             self.assertEqual(raw, str(node))
 
     def testLoadWholeConfig(self):

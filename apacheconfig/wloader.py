@@ -180,18 +180,27 @@ class ItemNode(Node):
             return self._raw[1]
         return self._raw[0]
 
+    def has_value(self):
+        if len(self.whitespace) > 0:
+            return len(self._raw) > 2
+        return len(self._raw) > 1
+
     @property
     def value(self):
         """Getter for the last token, semantically the "value" of this item.
         """
+        if not self.has_value():
+            return None
         return self._raw[-1]
 
     @value.setter
     def value(self, value):
         """Setter for the value of this item.
-        TODO(sydli): convert value to quotedstring automagically if quoted
+        TODO(sydli): convert `value` to quotedstring automagically if quoted
         """
-        self._raw[-1] = value
+        if not self.has_value():
+            self._raw = self._raw + (" ", value,)
+        self._raw = self._raw[0:-1] + (value,)
 
     def __str__(self):
         return "".join([_restore_original(word) for word in self._raw])
@@ -201,7 +210,7 @@ class ItemNode(Node):
                [_restore_original(word) for word in self._raw])
 
 
-class BlockNode(ContentsNode):
+class BlockNode(Node):
     """Contains data for a block.
 
     Manages any preceding whitespace, and details of contents.
@@ -209,13 +218,16 @@ class BlockNode(ContentsNode):
     Construct this using raw AST data from parser. Generally, block data looks
     like:
         ['block', <optional whitespace>, <open tag>, <contents object>, <close tag>]
-    E.g., for the block "<block_name block_value>
+    E.g., for the block "<block_tag block_args>
+
+    <block/> is represented with an empty contents object.
 
     The add/remove functions inherited from ContentsNode act on the contents
     contained within this block.
 
     Properties:
-        name:  getter only. Retrieves the full tag name.
+        tag:  getter only. Retrieves the full tag name.
+        arguments:  getter & setter for block arguments.
     """
 
     def __init__(self, raw):
@@ -224,24 +236,36 @@ class BlockNode(ContentsNode):
         if isinstance(raw[start], str) and raw[start].isspace():
             self._whitespace = raw[start]
             start += 1
-        self._name = raw[start]
-        self._close_name = raw[-1]
-        self._empty = len(raw[start + 1]) == 0
-        if not self._empty:
+        self._full_tag = ItemNode(('statement',) + raw[start])
+        self._close_tag = raw[-1]
+        self._contents = None
+        if len(raw[start+1]) > 0:
             self._contents = ContentsNode(raw[start + 1])
 
     @property
-    def name(self):
-        return self._name
+    def tag(self):
+        return self._full_tag.name
+
+    @property
+    def arguments(self):
+        return self._full_tag.value
+
+    @arguments.setter
+    def arguments(self, arguments):
+        self._full_tag.value = arguments
+
+    @property
+    def contents(self):
+        return self._contents
 
     def __str__(self):
-        if self._empty:
-            return "%s<%s/>" % (self.whitespace, self.name)
-        return "%s<%s>%s</%s>" % (self.whitespace, self.name,
-                                  str(self._contents), self._close_name)
+        if self._contents is None:
+            return "%s<%s/>" % (self.whitespace, str(self._full_tag))
+        return "%s<%s>%s</%s>" % (self.whitespace, str(self._full_tag),
+                                  str(self._contents), self._close_tag)
 
 def _create_parser(options={}, start='contents'):
-    options['preserve_whitespace'] = True
+    options['preservewhitespace'] = True
     ApacheConfigLexer = make_lexer(**options)
     ApacheConfigParser = make_parser(**options)
     return ApacheConfigParser(ApacheConfigLexer(), start=start)
