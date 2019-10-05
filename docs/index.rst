@@ -1,6 +1,9 @@
 Welcome to apacheconfig's documentation!
 ========================================
 
+.. automodule:: apacheconfig.wloader
+    :members:
+
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
